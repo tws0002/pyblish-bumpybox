@@ -1,13 +1,14 @@
-import pyblish.api
-import pyperclip
+from pyblish import api
+from pyblish_bumpybox import inventory
 
 
-class CopyToClipboardAction(pyblish.api.Action):
+class CopyToClipboardAction(api.Action):
 
     label = "Copy To Clipboard"
     on = "all"
 
     def process(self, context, plugin):
+        import pyperclip
 
         header = "{:<10}{:<40} -> {}".format("Success", "Plug-in", "Instance")
         result = "{success:<10}{plugin.__name__:<40} -> {instance}"
@@ -42,9 +43,10 @@ class CopyToClipboardAction(pyblish.api.Action):
         pyperclip.copy(report)
 
 
-class Report(pyblish.api.ContextPlugin):
+class Report(api.ContextPlugin):
     """ Report plugin. """
 
+    order = inventory.get_order(__file__, "Report")
     label = "Report"
     actions = [CopyToClipboardAction]
 

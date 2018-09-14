@@ -1,25 +1,19 @@
-import os
-import json
-import re
-
-import pyblish.api
-import clique
+from pyblish import api
+from pyblish_bumpybox import inventory
 
 
-class CollectJSON(pyblish.api.ContextPlugin):
+class CollectJSON(api.ContextPlugin):
     """ Collecting the json files in current directory. """
 
     label = "JSON"
-    order = pyblish.api.CollectorOrder + 0.1
+    order = inventory.get_order(__file__, "CollectJSON")
     hosts = ["ftrack"]
 
     def version_get(self, string, prefix):
         """ Extract version information from filenames.  Code from Foundry"s
         nukescripts.version_get()
         """
-
-        if string is None:
-            raise ValueError("Empty version string - no match")
+        import re
 
         regex = "[/_.]"+prefix+"\d+"
         matches = re.findall(regex, string, re.IGNORECASE)
@@ -29,6 +23,10 @@ class CollectJSON(pyblish.api.ContextPlugin):
         return matches[-1:][0][1], re.search("\d+", matches[-1:][0]).group()
 
     def process(self, context):
+        import os
+        import json
+
+        import clique
 
         current_file = context.data("currentFile")
 
@@ -49,7 +47,7 @@ class CollectJSON(pyblish.api.ContextPlugin):
         valid_families = ["img", "cache", "scene", "mov"]
         valid_data = []
         for data in instances:
-            families = data.get("families", [])
+            families = data.get("families", []) + [data["family"]]
             family_type = list(set(families) & set(valid_families))
             if family_type:
                 valid_data.append(data)
@@ -59,14 +57,20 @@ class CollectJSON(pyblish.api.ContextPlugin):
         files = []
         collections = []
         for data in valid_data:
-            if "collection" not in data.keys() or "output" in data["families"]:
+            if "collection" not in data.keys():
+                continue
+            if data["collection"] is None:
                 continue
 
             instance_collection = clique.parse(data["collection"])
 
-            version = self.version_get(
-                os.path.basename(instance_collection.format()), "v"
-            )[1]
+            try:
+                version = self.version_get(
+                    os.path.basename(instance_collection.format()), "v"
+                )[1]
+            except:
+                # Ignore any output that is not versioned
+                continue
 
             # Getting collections of all previous versions and current version
             for count in range(1, int(version) + 1):
@@ -114,9 +118,12 @@ class CollectJSON(pyblish.api.ContextPlugin):
                     data["name"], basename
                 )
 
-                families = set(valid_families) & set(data["families"])
-                instance.data["families"] = list(families) + ["output"]
+                families = data["families"] + [data["family"]]
+                family = list(set(valid_families) & set(families))[0]
+                instance.data["family"] = family
+                instance.data["families"] = ["output"]
                 instance.data["collection"] = collection
                 instance.data["version"] = int(version)
+                instance.data["publish"] = False
 
                 collections.append(collection)

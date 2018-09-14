@@ -1,20 +1,22 @@
-import os
-import json
-import datetime
-import time
-
-import pyblish.api
-import clique
+from pyblish import api
+from pyblish_bumpybox import inventory
 
 
-class ExtractJSON(pyblish.api.ContextPlugin):
+class ExtractJSON(api.ContextPlugin):
     """ Extract all instances to a serialized json file. """
 
-    order = pyblish.api.IntegratorOrder + 1
+    order = inventory.get_order(__file__, "ExtractJSON")
     label = "JSON"
     hosts = ["maya", "houdini", "nuke"]
+    targets = ["default", "process"]
 
     def process(self, context):
+        import os
+        import json
+        import datetime
+        import time
+
+        import clique
 
         workspace = os.path.join(
             os.path.dirname(context.data["currentFile"]),
@@ -40,7 +42,7 @@ class ExtractJSON(pyblish.api.ContextPlugin):
                     msg = "\"{0}\"".format(value)
                     msg += " in instance.data[\"{0}\"]".format(key)
                     msg += " could not be serialized."
-                    self.log.warning(msg)
+                    self.log.debug(msg)
 
             output_data.append(data)
 

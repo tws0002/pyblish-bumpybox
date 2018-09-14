@@ -1,16 +1,16 @@
-import os
+from pyblish import api
+from pyblish_bumpybox import inventory
 
-import pyblish.api
 
-
-class ValidateSceneVersion(pyblish.api.ContextPlugin):
+class ValidateSceneVersion(api.ContextPlugin):
     """ Validates the existence of version number on the scene. """
 
-    order = pyblish.api.ValidatorOrder
+    order = inventory.get_order(__file__, "ValidateSceneVersion")
     label = "Scene Version"
     optional = True
 
     def process(self, context):
+        import os
 
         name, ext = os.path.splitext(context.data("currentFile"))
         failure_message = (

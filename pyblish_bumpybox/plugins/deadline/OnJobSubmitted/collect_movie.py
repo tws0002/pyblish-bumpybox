@@ -1,15 +1,16 @@
-import json
-
-import pyblish.api
-import clique
+from pyblish import api
+from pyblish_bumpybox import inventory
 
 
-class BumpyboxDeadlineOnJobSubmittedCollectMovie(pyblish.api.ContextPlugin):
+class CollectMovie(api.ContextPlugin):
     """ Generate movie instance and job. """
 
-    order = pyblish.api.CollectorOrder
+    order = inventory.get_order(__file__, "CollectMovie")
 
     def process(self, context):
+        import json
+
+        import clique
 
         job = context.data("deadlineJob")
         data = job.GetJobExtraInfoKeyValueWithDefault(

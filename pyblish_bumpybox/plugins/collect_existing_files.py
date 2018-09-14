@@ -1,24 +1,22 @@
-import os
-import re
-
-import pyblish.api
-import clique
+from pyblish import api
+from pyblish_bumpybox import inventory
 
 
-class CollectExistingFiles(pyblish.api.ContextPlugin):
+class CollectExistingFiles(api.ContextPlugin):
     """Collect all existing files from the collection.
 
     Offset to iterate over all collected instances.
     """
 
-    order = pyblish.api.CollectorOrder + 0.25
+    order = inventory.get_order(__file__, "CollectExistingFiles")
     label = "Existing Files"
-    hosts = ["maya", "houdini", "nuke"]
+    hosts = ["maya", "houdini", "nuke", "nukestudio"]
 
     def get_version(self, string, prefix):
         """ Extract version information from filenames.  Code from Foundry"s
         nukescripts.get_version()
         """
+        import re
 
         if string is None:
             raise ValueError("Empty version string - no match")
@@ -33,9 +31,10 @@ class CollectExistingFiles(pyblish.api.ContextPlugin):
 
     def get_version_collections(self, collection, version):
         """Return all collections of previous collection versions."""
+        import clique
 
         collections = []
-        for count in range(1, int(version) + 1):
+        for count in range(1, int(version)):
             version_string = "v" + str(count).zfill(len(version))
             head = collection.head.replace(
                 "v" + version, version_string
@@ -55,8 +54,39 @@ class CollectExistingFiles(pyblish.api.ContextPlugin):
 
         return collections
 
+    def single_file_instances(self, instance, version, family_type, context):
+        import os
+
+        for count in range(1, int(version)):
+            version_string = "v" + str(count).zfill(len(version))
+            filename = instance.data["output_path"].replace(
+                "v" + version, version_string
+            )
+
+            if not os.path.exists(filename):
+                continue
+
+            new_instance = context.create_instance(
+                name=instance.data["name"],
+                label="{0} - {1}".format(
+                    instance.data["name"], os.path.basename(filename)
+                ),
+                family="output",
+                families=[family_type[0]],
+                publish=False,
+                output_path=filename,
+                version=context.data["version"]
+            )
+
+            for node in instance:
+                new_instance.add(node)
+
+            self.log.info(instance)
+            self.log.info(instance.data)
+
     def scan_collections_files(self, collections):
         """Return all files in the directories of the collections."""
+        import os
 
         scanned_dirs = []
         files = []
@@ -83,49 +113,74 @@ class CollectExistingFiles(pyblish.api.ContextPlugin):
         return collection
 
     def process(self, context):
+        import os
+
+        import clique
 
         # Gather all valid collections
-        valid_families = ["img", "cache", "scene", "mov"]
+        valid_families = ["img", "cache", "scene", "mov", "camera", "geometry"]
+        invalid_families = ["read"]
         collections = []
-        for instance in context:
-            families = instance.data.get("families", [])
-            family_type = list(set(families) & set(valid_families))
+        instances = context + context.data.get("instances", [])
+        for instance in instances:
 
+            families = instance.data.get("families", [])
+            families += [instance.data["family"]]
+
+            invalid_family = list(set(families) & set(invalid_families))
+            if invalid_family:
+                continue
+
+            family_type = list(set(families) & set(valid_families))
             if not family_type:
                 continue
 
-            collection = instance.data.get("collection", None)
+            instance_collection = instance.data.get("collection", None)
 
-            if not collection:
-                continue
+            if instance_collection:
 
-            collection.indexes.clear()
-
-            # Store instance data on collection for later usage
-            collection.name = instance.data["name"]
-            collection.label = instance.data["label"]
-            collection.family = family_type[0]
-            collection.version = context.data["version"]
-            collection.nodes = instance[:]
-
-            # Get older version collections
-            version = self.get_version(
-                os.path.basename(collection.format()), "v"
-            )
-            if version:
-                collections.extend(
-                    self.get_version_collections(
-                        collection, version[1]
-                    )
+                collection = clique.Collection(
+                    head=instance_collection.head,
+                    padding=instance_collection.padding,
+                    tail=instance_collection.tail
                 )
 
-            # Ensure original collection is gathered
-            if collection not in collections:
-                collections.append(collection)
+                # Store instance data on collection for later usage
+                collection.name = instance.data["name"]
+                collection.label = instance.data["label"]
+                collection.family = family_type[0]
+                collection.version = context.data["version"]
+                collection.nodes = instance[:]
+
+                # Get older version collections
+                version = self.get_version(
+                    os.path.basename(collection.format()), "v"
+                )
+                if version:
+                    collections.extend(
+                        self.get_version_collections(
+                            collection, version[1]
+                        )
+                    )
+
+            # Single file outputs
+            output_path = instance.data.get("output_path", "")
+
+            if output_path:
+
+                # Get older version collections
+                version = self.get_version(
+                    os.path.basename(output_path), "v"
+                )
+                if version:
+                    self.single_file_instances(
+                        instance, version[1], family_type, context
+                    )
 
         files = self.scan_collections_files(collections)
 
         # Generate instances from collections
+        populated_collections = []
         for collection in collections:
 
             collection = self.populate_collection(
@@ -134,6 +189,12 @@ class CollectExistingFiles(pyblish.api.ContextPlugin):
 
             if not list(collection):
                 continue
+
+            # Ensure collections are unique
+            if collection in populated_collections:
+                continue
+            else:
+                populated_collections.append(collection)
 
             instance = context.create_instance(name=collection.name)
 

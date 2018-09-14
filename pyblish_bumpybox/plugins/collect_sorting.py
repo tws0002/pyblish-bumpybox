@@ -1,15 +1,17 @@
-import pyblish.api
+from pyblish import api
+from pyblish_bumpybox import inventory
 
 
-class CollectSorting(pyblish.api.Collector):
+class CollectSorting(api.ContextPlugin):
     # offset to execute last of all collectors
-    order = pyblish.api.Collector.order + 0.49
+    order = inventory.get_order(__file__, "CollectSorting")
     label = "Sorting"
+    targets = ["default", "process"]
 
     def process(self, context):
 
         context[:] = sorted(
             context, key=lambda instance: (
-                instance.data("family"), instance.data("name")
+                instance.data("family"), instance.data("label")
             )
         )

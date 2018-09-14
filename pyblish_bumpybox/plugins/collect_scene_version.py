@@ -1,19 +1,18 @@
-import os
-import re
-import traceback
-
-import pyblish.api
+from pyblish import api
+from pyblish_bumpybox import inventory
 
 
-class CollectSceneVersion(pyblish.api.ContextPlugin):
+class CollectSceneVersion(api.ContextPlugin):
     """ Collects scene version from filename or passes the one found in
     the context.
     """
     # offset to get the latest currentFile update
-    order = pyblish.api.CollectorOrder + 0.1
+    order = inventory.get_order(__file__, "CollectSceneVersion")
     label = "Scene Version"
 
     def process(self, context):
+        import os
+        import traceback
 
         filename = os.path.basename(context.data("currentFile"))
 
@@ -24,12 +23,13 @@ class CollectSceneVersion(pyblish.api.ContextPlugin):
         except:
             msg = "Could not collect scene version:\n\n"
             msg += traceback.format_exc()
-            self.log.warning(msg)
+            self.log.debug(msg)
 
     def version_get(self, string, prefix):
         """ Extract version information from filenames.  Code from Foundry"s
         nukescripts.version_get()
         """
+        import re
 
         if string is None:
             raise ValueError("Empty version string - no match")
